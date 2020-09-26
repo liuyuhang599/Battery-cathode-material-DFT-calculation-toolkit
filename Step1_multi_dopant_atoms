@@ -1,0 +1,181 @@
+import numpy as np
+import random
+import pprint
+# Define a distance function
+print("Step 1(multi-dopant): Creating the face_POSCAR and tetra_POSCAR with multiple dopant atoms")
+def dist(i, j, pos):
+    distance = np.sqrt((pos[i][0] - pos[j][0])** 2 + (pos[i][1] - pos[j][1])** 2 + (pos[i][2] - pos[j][2])** 2)
+    return distance
+print("Input the file name of your supercell POSCAR/CONTCAR:")
+inputfile = input()
+
+with open(inputfile,'r') as file:
+    CONTCAR = file.readlines() # Read the whole file
+    elements = CONTCAR[5].split() # Read the line of elements
+    num_of_elements = CONTCAR[6].split() # Read the line of number of atoms for each element
+    for i in range(len(num_of_elements)):
+        num_of_elements[i] = int(num_of_elements[i])
+    print("Elements  ",elements)
+    print("Number of atoms  ",num_of_elements)
+    total_num = 0
+    for num in num_of_elements:
+        total_num += num
+    print(total_num,"atoms in total")    
+    
+    # Get lattice vectors 
+    base_vector = [0] * 3
+    for i in range(3):
+        base_vector[i] = CONTCAR[2+i].split()
+    for i in range(3):
+        for j in range(3):
+            base_vector[i][j] = float(base_vector[i][j]) 
+    base_vector = np.array(base_vector)  
+    
+    # Read all atomic positions    
+    position = [[0.0,0.0,0.0]] * total_num
+    for i in range(total_num):
+        position[i] = CONTCAR[i + 8].split()
+    rows = len(position)
+    cols = 3
+    for i in range(rows):
+        for j in range(cols):
+            position[i][j] = float(position[i][j])
+        # Make all the atoms in the range from -0.25 to 0.9 in x, y, z
+    for i in range(rows):
+        if (position[i][0] > 0.9):
+            position[i][0] -= 1
+        if (position[i][1] > 0.9):
+            position[i][1] -= 1
+        if (position[i][2] > 0.9):
+            position[i][2] -= 1
+    for i in range(rows):
+        if (position[i][0] < -0.25):
+            position[i][0] += 1
+        if (position[i][1] < -0.25):
+            position[i][1] += 1
+        if (position[i][2] < -0.25):
+            position[i][2] += 1
+    position = np.array(position)
+    position_Direct = position
+    position = np.dot(position, base_vector)
+    
+    # Search the Ni atom, dopant site, Li-tricancy site 
+    Ni_index = 0
+    NN_Ni_index = 0 # The nearest negihbor of the Ni that will be studied, we will change this Ni to dopant element
+    NN_Ni_dist = 10 
+
+    # locate the Ni site at (0 0 0) 
+    for i in range(rows):
+        if (abs(position[i][0]) < 0.001) and (abs(position[i][1]) < 0.001) and (abs(position[i][2]) < 0.001): 
+            Ni_index = i
+
+    # locate the nearest neighbor Ni site
+    for i in range(rows):
+        if (position[i][0] > 0) and (position[i][1] > 0) and (abs(position[i][2]) < 0.01) and (i != Ni_index): #The Ni sites on the 001 plane
+            if dist(i,Ni_index,position) < NN_Ni_dist:
+                NN_Ni_dist = dist(i, Ni_index,position)
+                NN_Ni_index = i
+    print("The TM atom being studied is the atom No.", Ni_index+1)
+    print("The first TM atom being changed to dopant is No.", NN_Ni_index+1)
+
+    # Search the position of Li-trivacancy
+    NN_Li_index = 0;
+    NN_Li_dist = 10;
+    for i in range(num_of_elements[0]): # num_of_elements[0] is the number of Li atom
+        if (position[i][2] >= 0):
+            if (dist(i, Ni_index, position) < NN_Li_dist): # search the nearest Li with z > 0
+                NN_Li_dist = dist(i, Ni_index, position)
+                NN_Li_index = i
+    print("The Li atom being moved to create a Li-trivacancy is No.", NN_Li_index+1)
+    print("The cartesian position of this Li atom is",position[NN_Li_index])
+    Li_x_index = 1000
+    Li_x_dist = 10
+    Li_y_index = 1000
+    Li_y_dist = 10
+    for i in range(num_of_elements[0]):
+        if (i != NN_Li_index):
+            if (abs(position[i][2] - position[NN_Li_index][2]) < 0.2):
+                if (position[i][0] > position[NN_Li_index][0]) and (abs(position[i][1] - position[NN_Li_index][1]) < 0.1):
+                    if ((position[i][0] - position[NN_Li_index][0]) < Li_x_dist):
+                        Li_x_index = i;
+                        Li_x_dist = position[i][0] - position[NN_Li_index][0]
+                if (position[i][1] > position[NN_Li_index][1]) and (abs(position[i][0] - position[NN_Li_index][0] < 0.1)):
+                    if ((position[i][1] - position[NN_Li_index][1])) < Li_y_dist:
+                        Li_y_index = i;
+                        Li_y_dist = position[i][1] - position[NN_Li_index][1]
+    print("The Li atom No.", NN_Li_index+1, "is being moved to the middle of No.",Li_x_index+1,"and No.",Li_y_index+1)
+    print("The cartesian positions:",position[Li_x_index],position[Li_y_index])
+    position_Direct[NN_Li_index] = (position_Direct[Li_x_index] + position_Direct[Li_y_index])/2
+    
+    #________Randomly Select several Ni atoms (should not the the Ni_index or NN_Ni_index), change them to be dopant_________
+    print("How many dopant elements? :")
+    num_other_dopant = int(input()) - 1
+    other_dopant_list = list()
+    print("Range is from",num_of_elements[0]+1-1,'to',num_of_elements[0]+num_of_elements[1]-1)
+    while (len(other_dopant_list) < num_other_dopant):
+        random_index = random.randint(num_of_elements[0]+1-1, num_of_elements[0]+num_of_elements[1]-1)
+        if random_index != Ni_index and random_index != NN_Ni_index:
+            other_dopant_list.append(random_index)
+    #print("other_dopant_list is", other_dopant_list)
+    dopant_list = other_dopant_list
+    dopant_list.append(NN_Ni_index)
+    pos_dopant = list()
+    
+    for index in dopant_list:
+        pos_dopant.append([position_Direct[index][0],position_Direct[index][1],position_Direct[index][2]])
+    pprint.pprint(dopant_list)
+    pprint.pprint(pos_dopant)
+    
+## Output part
+print("Please input the dopant element:",end=" ")
+dopant = input() 
+output_filename = inputfile + "_int_"+dopant+"_"+str(num_other_dopant+1)
+with open(output_filename,'w') as output:
+    title = CONTCAR[:5]
+    
+    new_elements = list()
+    new_elements.append(elements[0])
+    new_elements.append(dopant)
+    new_elements.append(elements[1])
+    new_elements.append(elements[2])
+    
+    new_num_of_elements = list()
+    new_num_of_elements.append(num_of_elements[0])
+    new_num_of_elements.append(num_other_dopant+1)
+    new_num_of_elements.append(num_of_elements[1] - (num_other_dopant+1))
+    new_num_of_elements.append(num_of_elements[2])
+
+    output.writelines(title)
+    output.write("   ")
+    for element in new_elements:
+        output.write(element)
+        output.write("  ")
+    output.write("\n")
+    output.write("   ")
+    for num in new_num_of_elements:
+        output.write(str(num))
+        output.write("  ")
+    output.write('\n')
+    output.write("Direct\n")
+    for i in range(new_num_of_elements[0]):
+        for j in range(cols):
+            output.write("    ")
+            output.write(str(format(position_Direct[i][j], '.8f')))
+            output.write("    ")
+        output.write('\n')
+    for i in range(len(pos_dopant)):
+        for j in range(cols):
+            output.write("    ")
+            output.write(str(format(pos_dopant[i][j], '.8f')))
+            output.write("    ")
+        output.write('\n')
+    for i in range(new_num_of_elements[0],rows):
+        #print(i)
+        if i not in dopant_list:
+            for j in range(cols):
+                output.write("    ")
+                output.write(str(format(position_Direct[i][j], '.8f')))
+                output.write("    ")
+            output.write('\n')
+    print("Work Done!")
+    print("The result is stored in ",output_filename)
