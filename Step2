@@ -1,0 +1,130 @@
+import pprint
+import numpy as np
+# Define a distance function
+print("Step 2: Creating the face_POSCAR and tetra_POSCAR with 1 dopant atom")
+def dist(i, j, pos):
+    distance = np.sqrt((pos[i][0] - pos[j][0])** 2 + (pos[i][1] - pos[j][1])** 2 + (pos[i][2] - pos[j][2])** 2)
+    return distance
+print("Input the file name of your POSCAR/CONTCAR:")
+inputfile = input()
+with open(inputfile,'r') as file:
+    CONTCAR = file.readlines() # Read the whole file
+    elements = CONTCAR[5].split() # Read the line of elements
+    num_of_elements = CONTCAR[6].split() # Read the line of number of atoms for each element
+    for i in range(len(num_of_elements)):
+        num_of_elements[i] = int(num_of_elements[i])
+    print("Elements  ",elements)
+    print("Number of atoms  ",num_of_elements)
+    total_num = 0
+    for num in num_of_elements:
+        total_num += num
+    print(total_num,"atoms in total")    
+    
+    # Get lattice vectors 
+    base_vector = [0] * 3
+    for i in range(3):
+        base_vector[i] = CONTCAR[2+i].split()
+    for i in range(3):
+        for j in range(3):
+            base_vector[i][j] = float(base_vector[i][j]) 
+    base_vector = np.array(base_vector)  
+    
+    # Read all atomic positions    
+    position = [[0.0,0.0,0.0]] * total_num
+    for i in range(total_num):
+        position[i] = CONTCAR[i + 8].split()
+    rows = len(position)
+    cols = len(position[0])
+    for i in range(rows):
+        for j in range(cols):
+            position[i][j] = float(position[i][j])
+        # Make all the atoms in the range from -0.7 to 0.7 in x, y, z
+    for i in range(rows):
+        if (position[i][0] > 0.7):
+            position[i][0] -= 1
+        if (position[i][1] > 0.7):
+            position[i][1] -= 1
+        if (position[i][2] > 0.9):
+            position[i][2] -= 1
+    for i in range(rows):
+        if (position[i][0] < -0.7):
+            position[i][0] += 1
+        if (position[i][1] < -0.7):
+            position[i][1] += 1
+        if (position[i][2] < -0.9):
+            position[i][2] += 1
+    position = np.array(position)
+    position_Direct = position
+    position = np.dot(position, base_vector)
+    
+    # Search the Ni atom, dopant site, Li-tricancy site 
+    Ni_index = 0
+    NN_Ni_index = 0 # The nearest negihbor of the Ni that will be studied, we will change this Ni to dopant element
+    NN_Ni_dist = 10 
+
+    # locate the Ni site at (0 0 0) 
+    for i in range(rows):
+        if (abs(position[i][0]) < 0.001) and (abs(position[i][1]) < 0.001) and (abs(position[i][2]) < 0.001): 
+            Ni_index = i
+    # Search the 4 Oxygen atoms by sorting the distance to the studied Ni site
+    O1_index = 0
+    O2_index = 0
+    O3_index = 0
+    O4_index = 0
+    
+    O_dist = list()
+    for i in range(num_of_elements[-1]):
+        if(position[i+total_num-num_of_elements[-1]][2] > 0 ):
+            O_dist.append([dist(i+total_num-num_of_elements[-1],Ni_index,position),i+total_num-num_of_elements[-1]])
+    O_dist.sort()
+    
+    #pprint.pprint(O_dist)
+#     pprint.pprint(position_Direct[148])
+#     pprint.pprint(position[148])
+    
+    O1_index = O_dist[0][1]
+    O2_index = O_dist[1][1]
+    O3_index = O_dist[2][1]
+    print("The 3 Oxygen atoms forming a face:")
+    print(O1_index+1)
+    print(O2_index+1)
+    print(O3_index+1)
+    O_dist = list()
+    for i in range(num_of_elements[-1]):
+        if(abs(position[i+total_num-num_of_elements[-1]][1]) < 0.5 and abs(position[i+total_num-num_of_elements[-1]][0]) < 0.5 and position[i+total_num-num_of_elements[-1]][2] > 0 ):
+            O_dist.append([dist(i+total_num-num_of_elements[-1],Ni_index,position),i+total_num-num_of_elements[-1]])
+    O_dist.sort()
+    pprint.pprint(O_dist)
+    O4_index = O_dist[0][1]
+    print("The 4th Oxygen atoms forming a tetrahedron with the frist 3 Oxygen atoms:")
+    print(O4_index+1)
+    face_pos = (position_Direct[O1_index] + position_Direct[O2_index] + position_Direct[O3_index])/3
+    print("The fractional position of face center is:(",format(face_pos[0],'.8f'),format(face_pos[1],'.8f'),format(face_pos[2],'.8f'),')')
+    tetra_pos = (position_Direct[O1_index] + position_Direct[O2_index] + position_Direct[O3_index] + position_Direct[O4_index])/4
+    print("The fractional position of tetra-site is:(",format(tetra_pos[0],'.8f'),format(tetra_pos[1],'.8f'),format(tetra_pos[2],'.8f'),')')
+    
+    Car_face_pos = (position[O1_index] + position[O2_index] + position[O3_index])/3
+    print("The cartesian position of face center is:(",format(Car_face_pos[0],'.8f'),format(Car_face_pos[1],'.8f'),format(Car_face_pos[2],'.8f'),')')
+    Car_tetra_pos = (position[O1_index] + position[O2_index] + position[O3_index] + position[O4_index])/4
+    print("The cartesian position of tetra-site is:(",format(Car_tetra_pos[0],'.8f'),format(Car_tetra_pos[1],'.8f'),format(Car_tetra_pos[2],'.8f'),')')
+#Ouput the POSCAR_face
+output_face = inputfile + "_face"
+with open(output_face,'w') as face:
+    face.writelines(CONTCAR[:8])
+    position_Direct[Ni_index] = face_pos
+    for i in range(rows):
+        for j in range(cols):
+            face.write("    ")
+            face.write(str(format(position_Direct[i][j], '.8f')))
+            face.write("    ")
+        face.write('\n')
+output_tetra = inputfile + "_tetra"
+with open(output_tetra,'w') as tetra:
+    tetra.writelines(CONTCAR[:8])
+    position_Direct[Ni_index] = tetra_pos
+    for i in range(rows):
+        for j in range(cols):
+            tetra.write("    ")
+            tetra.write(str(format(position_Direct[i][j], '.8f')))
+            tetra.write("    ")
+        tetra.write('\n')
