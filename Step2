@@ -64,7 +64,7 @@ with open(inputfile,'r') as file:
 
     # locate the Ni site at (0 0 0) 
     for i in range(rows):
-        if (abs(position[i][0]) < 0.001) and (abs(position[i][1]) < 0.001) and (abs(position[i][2]) < 0.001): 
+        if (abs(position[i][0]) < 0.1) and (abs(position[i][1]) < 0.1) and (abs(position[i][2]) < 0.1): 
             Ni_index = i
     # Search the 4 Oxygen atoms by sorting the distance to the studied Ni site
     O1_index = 0
